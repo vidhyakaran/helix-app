@@ -1,0 +1,57 @@
+import Link from "next/link";
+import {
+  LayoutDashboard,
+  Sparkles,
+  Search,
+  PenTool,
+  Users,
+  Briefcase,
+  BarChart3,
+  Bot,
+} from "lucide-react";
+
+const navItems = [
+  { name: "Executive Overview", icon: LayoutDashboard, href: "/" },
+  { name: "AI Search Center", icon: Sparkles, href: "/ai-search" },
+  { name: "SEO Operations", icon: Search, href: "#" },
+  { name: "Content Ops", icon: PenTool, href: "/content-ops" },
+  { name: "Team Management", icon: Users, href: "#" },
+  { name: "Client Portals", icon: Briefcase, href: "#" },
+  { name: "Analytics & Reports", icon: BarChart3, href: "#" },
+  { name: "AI Automation", icon: Bot, href: "#" },
+];
+
+export function Sidebar() {
+  return (
+    <aside className="w-64 border-r border-border bg-card flex flex-col h-full sticky top-0">
+      <div className="h-14 flex items-center px-4 border-b border-border">
+        <div className="flex items-center gap-2 text-primary font-bold tracking-widest text-lg">
+          <div className="w-6 h-6 rounded bg-primary text-primary-foreground flex items-center justify-center text-xs">
+            HX
+          </div>
+          HELIX
+        </div>
+      </div>
+      <div className="p-4 flex-1 overflow-y-auto">
+        <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-4">
+          Command Centers
+        </div>
+        <nav className="space-y-1">
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            return (
+              <Link
+                key={item.name}
+                href={item.href}
+                className="flex items-center gap-3 px-3 py-2 text-sm text-foreground/80 hover:text-foreground hover:bg-secondary rounded-md transition-colors"
+              >
+                <Icon size={16} />
+                {item.name}
+              </Link>
+            );
+          })}
+        </nav>
+      </div>
+    </aside>
+  );
+}
