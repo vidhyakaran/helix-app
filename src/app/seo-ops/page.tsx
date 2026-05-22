@@ -1,19 +1,44 @@
 "use client";
 
-import { useState } from "react";
-import { 
-  Search, 
-  ArrowUpRight, 
-  ArrowDownRight, 
-  Sparkles, 
-  CheckCircle, 
-  AlertTriangle, 
-  XCircle, 
-  RefreshCw, 
-  Globe, 
-  Settings2,
-  FileText
+import { useState, useEffect } from "react";
+import {
+  Search,
+  ArrowUpRight,
+  ArrowDownRight,
+  Sparkles,
+  CheckCircle,
+  AlertTriangle,
+  XCircle,
+  RefreshCw,
+  FileText,
+  TrendingUp,
+  Eye,
+  MousePointerClick,
 } from "lucide-react";
+
+interface DailyData {
+  date: string;
+  impressions: number;
+  totalATC: number;
+  totalSales: number;
+  budgetSpent: number;
+  roas: number;
+}
+
+interface MonthlyData {
+  month: string;
+  impressions: number;
+  totalATC: number;
+  totalSales: number;
+  amountSpent: number;
+  roas: number;
+}
+
+interface ApiResponse {
+  success: boolean;
+  monthlySummary: MonthlyData[];
+  dailyPerformance: DailyData[];
+}
 
 interface Keyword {
   keyword: string;
@@ -31,7 +56,7 @@ const initialKeywords: Keyword[] = [
   { keyword: "buy zero sugar snacks online", category: "transactional", volume: 5400, rank: 4, change: 3, ctr: 12.3 },
   { keyword: "blinkit instant delivery snacks", category: "category", volume: 8900, rank: 12, change: -1, ctr: 1.5 },
   { keyword: "millex energy bar price", category: "transactional", volume: 3200, rank: 1, change: 0, ctr: 38.9 },
-  { keyword: "gluten free breakfast bars in india", category: "category", volume: 6200, rank: 15, change: 4, ctr: 0.8 },
+  { keyword: "gluten free breakfast bars india", category: "category", volume: 6200, rank: 15, change: 4, ctr: 0.8 },
 ];
 
 const auditPages = [
@@ -47,22 +72,26 @@ export default function SeoOperations() {
   const [search, setSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState<"all" | "brand" | "category" | "transactional">("all");
   const [scanning, setScanning] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<ApiResponse | null>(null);
+
+  useEffect(() => {
+    fetch("/api/excel")
+      .then((r) => r.json())
+      .then((json) => { if (json.success) setData(json); })
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
 
   const handleScan = () => {
     setScanning(true);
     setTimeout(() => {
-      // Mock rank updates randomly
-      setKeywords(prev => 
-        prev.map(k => {
+      setKeywords((prev) =>
+        prev.map((k) => {
           const rand = Math.random();
           if (rand > 0.6) {
             const rankChange = Math.floor(Math.random() * 3) - 1;
-            return {
-              ...k,
-              rank: Math.max(1, k.rank + rankChange),
-              change: k.change + rankChange,
-              ctr: Math.max(0.5, +(k.ctr + (Math.random() * 2 - 1)).toFixed(1))
-            };
+            return { ...k, rank: Math.max(1, k.rank + rankChange), change: k.change + rankChange, ctr: Math.max(0.5, +(k.ctr + (Math.random() * 2 - 1)).toFixed(1)) };
           }
           return k;
         })
@@ -71,11 +100,19 @@ export default function SeoOperations() {
     }, 1500);
   };
 
-  const filteredKeywords = keywords.filter(k => {
+  const filteredKeywords = keywords.filter((k) => {
     const matchesSearch = k.keyword.toLowerCase().includes(search.toLowerCase());
     const matchesFilter = activeFilter === "all" || k.category === activeFilter;
     return matchesSearch && matchesFilter;
   });
+
+  // Derive real stats from CSV
+  const totalImpressions = data?.dailyPerformance.reduce((a, r) => a + r.impressions, 0) ?? 0;
+  const totalATC = data?.dailyPerformance.reduce((a, r) => a + r.totalATC, 0) ?? 0;
+  const atcRate = totalImpressions > 0 ? ((totalATC / totalImpressions) * 100).toFixed(2) : "0.00";
+  const bestRoasDay = data?.dailyPerformance.reduce((best, r) => (r.roas > (best?.roas ?? 0) ? r : best), null as DailyData | null);
+  const top3Keywords = keywords.filter((k) => k.rank <= 3).length;
+  const avgCtr = (keywords.reduce((a, k) => a + k.ctr, 0) / keywords.length).toFixed(1);
 
   return (
     <div className="space-y-6">
@@ -83,60 +120,68 @@ export default function SeoOperations() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">SEO Operations Command</h1>
-          <p className="text-sm text-muted-foreground mt-1">Manage search engine indexing, keyword ranks, and core web vitals.</p>
+          <p className="text-sm text-muted-foreground mt-1">Manage search engine indexing, keyword ranks, and Millex performance metrics.</p>
         </div>
         <button
           onClick={handleScan}
           disabled={scanning}
           className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-semibold hover:bg-primary/95 flex items-center gap-2 disabled:opacity-50 transition-all shadow-md shadow-primary/10"
         >
-          {scanning ? (
-            <RefreshCw size={15} className="animate-spin" />
-          ) : (
-            <Sparkles size={15} />
-          )}
+          {scanning ? <RefreshCw size={15} className="animate-spin" /> : <Sparkles size={15} />}
           <span>{scanning ? "Auditing ranks..." : "Run Organic Rank Scan"}</span>
         </button>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* Stats Cards — real CSV data */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="p-5 rounded-xl border border-border bg-card shadow-sm flex flex-col gap-2">
-          <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Top 3 Keywords</span>
+          <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider flex items-center gap-1.5"><Eye size={12} /> Total Impressions</span>
           <div className="flex items-baseline gap-2 mt-1">
-            <span className="text-3xl font-bold">3 / 7</span>
-            <span className="text-xs text-emerald-500 font-semibold flex items-center gap-0.5">
-              <ArrowUpRight size={12} />
-              Steady
-            </span>
+            <span className="text-2xl font-bold">{loading ? "—" : totalImpressions.toLocaleString("en-IN")}</span>
           </div>
-          <span className="text-[10px] text-muted-foreground">Keywords ranked #1 to #3</span>
-        </div>
-        
-        <div className="p-5 rounded-xl border border-border bg-card shadow-sm flex flex-col gap-2">
-          <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Average CTR</span>
-          <div className="flex items-baseline gap-2 mt-1">
-            <span className="text-3xl font-bold">18.5%</span>
-            <span className="text-xs text-emerald-500 font-semibold flex items-center gap-0.5">
-              <ArrowUpRight size={12} />
-              +1.2% MoM
-            </span>
-          </div>
-          <span className="text-[10px] text-muted-foreground">Blended organic search CTR</span>
+          <span className="text-[10px] text-muted-foreground">All daily records from tracker</span>
         </div>
 
         <div className="p-5 rounded-xl border border-border bg-card shadow-sm flex flex-col gap-2">
-          <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">On-Page Health Index</span>
+          <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider flex items-center gap-1.5"><MousePointerClick size={12} /> ATC Rate</span>
           <div className="flex items-baseline gap-2 mt-1">
-            <span className="text-3xl font-bold">81.6 / 100</span>
-            <span className="text-xs text-rose-500 font-semibold flex items-center gap-0.5">
-              <ArrowDownRight size={12} />
-              -2.4 pts
-            </span>
+            <span className="text-2xl font-bold">{loading ? "—" : `${atcRate}%`}</span>
+            <span className="text-xs text-emerald-500 font-semibold flex items-center gap-0.5"><ArrowUpRight size={12} />Strong</span>
           </div>
-          <span className="text-[10px] text-muted-foreground">Average audit score of core URLs</span>
+          <span className="text-[10px] text-muted-foreground">Add-to-cart rate (ATC / Impressions)</span>
+        </div>
+
+        <div className="p-5 rounded-xl border border-border bg-card shadow-sm flex flex-col gap-2">
+          <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider flex items-center gap-1.5"><TrendingUp size={12} /> Top 3 Keywords</span>
+          <div className="flex items-baseline gap-2 mt-1">
+            <span className="text-2xl font-bold">{top3Keywords} / {keywords.length}</span>
+            <span className="text-xs text-emerald-500 font-semibold flex items-center gap-0.5"><ArrowUpRight size={12} />Steady</span>
+          </div>
+          <span className="text-[10px] text-muted-foreground">Keywords ranked #1 to #3</span>
+        </div>
+
+        <div className="p-5 rounded-xl border border-border bg-card shadow-sm flex flex-col gap-2">
+          <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Avg CTR</span>
+          <div className="flex items-baseline gap-2 mt-1">
+            <span className="text-2xl font-bold">{avgCtr}%</span>
+            <span className="text-xs text-rose-500 font-semibold flex items-center gap-0.5"><ArrowDownRight size={12} />-1.2%</span>
+          </div>
+          <span className="text-[10px] text-muted-foreground">Blended organic search CTR</span>
         </div>
       </div>
+
+      {/* Best RoAS Day banner */}
+      {bestRoasDay && (
+        <div className="p-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 flex items-center gap-3">
+          <Sparkles size={16} className="text-emerald-400 shrink-0" />
+          <p className="text-sm text-foreground/90">
+            <span className="font-semibold text-emerald-400">Peak RoAS Day:</span>{" "}
+            <span className="font-medium">{bestRoasDay.date}</span> — achieved{" "}
+            <span className="font-bold text-emerald-400">{bestRoasDay.roas.toFixed(2)}x RoAS</span> on ₹{bestRoasDay.budgetSpent.toLocaleString("en-IN")} spend,
+            generating ₹{bestRoasDay.totalSales.toLocaleString("en-IN")} in sales. (Source: Millex Blinkit Tracker)
+          </p>
+        </div>
+      )}
 
       {/* Main Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -147,7 +192,6 @@ export default function SeoOperations() {
               <h2 className="text-lg font-semibold tracking-tight">Keyword Rank Tracker</h2>
               <p className="text-xs text-muted-foreground">Track organic visibility across target phrases.</p>
             </div>
-            
             <div className="flex items-center gap-2">
               <div className="relative">
                 <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -159,7 +203,6 @@ export default function SeoOperations() {
                   className="bg-secondary border border-border rounded-lg pl-8 pr-2.5 py-1.5 text-xs outline-none focus:border-primary/80 transition-colors w-36"
                 />
               </div>
-              
               <select
                 value={activeFilter}
                 onChange={(e: any) => setActiveFilter(e.target.value)}
@@ -189,13 +232,7 @@ export default function SeoOperations() {
                   <tr key={i} className="hover:bg-secondary/10 transition-colors">
                     <td className="px-4 py-3 font-medium text-foreground">{k.keyword}</td>
                     <td className="px-4 py-3">
-                      <span className={`px-2 py-0.5 rounded text-[9px] font-semibold uppercase ${
-                        k.category === "brand"
-                          ? "bg-primary/10 text-primary border border-primary/20"
-                          : k.category === "transactional"
-                          ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-                          : "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-                      }`}>
+                      <span className={`px-2 py-0.5 rounded text-[9px] font-semibold uppercase ${k.category === "brand" ? "bg-primary/10 text-primary border border-primary/20" : k.category === "transactional" ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" : "bg-amber-500/10 text-amber-400 border border-amber-500/20"}`}>
                         {k.category}
                       </span>
                     </td>
@@ -204,11 +241,8 @@ export default function SeoOperations() {
                       <div className="inline-flex items-center gap-1.5 justify-end w-full">
                         <span className="font-semibold text-foreground">#{k.rank}</span>
                         {k.change !== 0 && (
-                          <span className={`text-[10px] flex items-center font-bold ${
-                            k.change > 0 ? "text-emerald-500" : "text-rose-500"
-                          }`}>
-                            {k.change > 0 ? "+" : ""}
-                            {k.change}
+                          <span className={`text-[10px] flex items-center font-bold ${k.change > 0 ? "text-emerald-500" : "text-rose-500"}`}>
+                            {k.change > 0 ? "+" : ""}{k.change}
                           </span>
                         )}
                       </div>
@@ -227,13 +261,9 @@ export default function SeoOperations() {
             <h2 className="text-lg font-semibold tracking-tight">On-Page SEO Audits</h2>
             <p className="text-xs text-muted-foreground">Index audit results and crawl validation scores.</p>
           </div>
-
           <div className="flex-1 flex flex-col gap-3">
             {auditPages.map((page, i) => (
-              <div 
-                key={i} 
-                className="p-3.5 border border-border bg-secondary/15 rounded-lg flex items-center justify-between hover:border-primary/20 transition-all cursor-pointer group"
-              >
+              <div key={i} className="p-3.5 border border-border bg-secondary/15 rounded-lg flex items-center justify-between hover:border-primary/20 transition-all cursor-pointer group">
                 <div className="flex items-start gap-3">
                   <div className="mt-0.5 text-muted-foreground group-hover:text-primary transition-colors">
                     <FileText size={16} />
@@ -243,34 +273,33 @@ export default function SeoOperations() {
                     <span className="text-[10px] text-muted-foreground">{page.url}</span>
                   </div>
                 </div>
-
                 <div className="flex items-center gap-3 shrink-0">
                   <div className="flex flex-col items-end gap-1">
-                    <span className={`text-xs font-bold ${
-                      page.score >= 90 
-                        ? "text-emerald-500" 
-                        : page.score >= 70 
-                        ? "text-amber-500" 
-                        : "text-rose-500"
-                    }`}>
-                      {page.score}
-                    </span>
+                    <span className={`text-xs font-bold ${page.score >= 90 ? "text-emerald-500" : page.score >= 70 ? "text-amber-500" : "text-rose-500"}`}>{page.score}</span>
                     <span className="text-[8px] text-muted-foreground leading-none">{page.issues} issues</span>
                   </div>
-
                   <div>
-                    {page.status === "passing" ? (
-                      <CheckCircle size={14} className="text-emerald-500" />
-                    ) : page.status === "warning" ? (
-                      <AlertTriangle size={14} className="text-amber-500" />
-                    ) : (
-                      <XCircle size={14} className="text-rose-500" />
-                    )}
+                    {page.status === "passing" ? <CheckCircle size={14} className="text-emerald-500" /> : page.status === "warning" ? <AlertTriangle size={14} className="text-amber-500" /> : <XCircle size={14} className="text-rose-500" />}
                   </div>
                 </div>
               </div>
             ))}
           </div>
+
+          {/* Live Tracker Impressions Summary */}
+          {!loading && data && (
+            <div className="pt-4 border-t border-border">
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Blinkit Tracker Impressions by Month</p>
+              <div className="flex flex-col gap-1.5">
+                {data.monthlySummary.map((m, i) => (
+                  <div key={i} className="flex items-center justify-between text-xs">
+                    <span className="font-medium text-foreground/80">{m.month}</span>
+                    <span className="font-semibold text-foreground">{m.impressions.toLocaleString("en-IN")}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

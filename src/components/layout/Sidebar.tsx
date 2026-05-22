@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   Sparkles,
@@ -13,15 +16,17 @@ import {
 const navItems = [
   { name: "Executive Overview", icon: LayoutDashboard, href: "/" },
   { name: "AI Search Center", icon: Sparkles, href: "/ai-search" },
-  { name: "SEO Operations", icon: Search, href: "#" },
+  { name: "SEO Operations", icon: Search, href: "/seo-ops" },
   { name: "Content Ops", icon: PenTool, href: "/content-ops" },
-  { name: "Team Management", icon: Users, href: "#" },
-  { name: "Client Portals", icon: Briefcase, href: "#" },
-  { name: "Analytics & Reports", icon: BarChart3, href: "#" },
-  { name: "AI Automation", icon: Bot, href: "#" },
+  { name: "Team Management", icon: Users, href: "/team" },
+  { name: "Client Portals", icon: Briefcase, href: "/clients" },
+  { name: "Analytics & Reports", icon: BarChart3, href: "/reports" },
+  { name: "AI Automation", icon: Bot, href: "/ai-automation" },
 ];
 
 export function Sidebar() {
+  const pathname = usePathname();
+
   return (
     <aside className="w-64 border-r border-border bg-card flex flex-col h-full sticky top-0">
       <div className="h-14 flex items-center px-4 border-b border-border">
@@ -39,11 +44,19 @@ export function Sidebar() {
         <nav className="space-y-1">
           {navItems.map((item) => {
             const Icon = item.icon;
+            const isActive =
+              item.href === "/"
+                ? pathname === "/"
+                : pathname.startsWith(item.href);
             return (
               <Link
                 key={item.name}
                 href={item.href}
-                className="flex items-center gap-3 px-3 py-2 text-sm text-foreground/80 hover:text-foreground hover:bg-secondary rounded-md transition-colors"
+                className={`flex items-center gap-3 px-3 py-2 text-sm rounded-md transition-colors ${
+                  isActive
+                    ? "bg-primary/10 text-primary font-semibold border border-primary/20"
+                    : "text-foreground/80 hover:text-foreground hover:bg-secondary"
+                }`}
               >
                 <Icon size={16} />
                 {item.name}
