@@ -249,16 +249,17 @@ export default function DailyPerformanceDashboard() {
 
     const daily = [...data.dailyPerformance].reverse();
 
-    // 1. Calculate all baseline channel values for each day first
-    const dailyWithAllChannels = daily.map((row, i) => {
-      const total = row.totalSales;
-      const v = Math.sin(i * 7.3) * 0.015;
-      const shopify = Math.round(total * (CHANNEL_RATIOS.shopify + v));
-      const amazonPaid = Math.round(total * (CHANNEL_RATIOS.amazonPaid - v * 0.4));
-      const amazonOrganic = Math.round(total * (CHANNEL_RATIOS.amazonOrganic + v * 0.2));
-      const flipkartPaid = Math.round(total * (CHANNEL_RATIOS.flipkartPaid - v * 0.15));
-      const flipkartOrganic = Math.round(total * CHANNEL_RATIOS.flipkartOrganic);
-      const blinkit = Math.max(0, total - shopify - amazonPaid - amazonOrganic - flipkartPaid - flipkartOrganic);
+    // 1. Map row data directly from Excel sheet
+    const dailyWithAllChannels = daily.map((row) => {
+      const total = row.totalSales || 0;
+      
+      // Since the sheet is specifically for Blinkit, all revenue maps to Blinkit
+      const shopify = 0;
+      const amazonPaid = 0;
+      const amazonOrganic = 0;
+      const flipkartPaid = 0;
+      const flipkartOrganic = 0;
+      const blinkit = total;
 
       return {
         name: shortDate(row.date),
@@ -270,8 +271,10 @@ export default function DailyPerformanceDashboard() {
         flipkartOrganic,
         blinkit,
         originalRevenue: total,
-        originalSpent: row.budgetSpent,
-        originalRoas: row.roas,
+        originalSpent: row.budgetSpent || 0,
+        originalRoas: row.roas || 0,
+        directSales: row.directSales || 0,
+        indirectSales: row.indirectSales || 0,
       };
     });
 
@@ -311,25 +314,21 @@ export default function DailyPerformanceDashboard() {
 
     // 3. Filter/re-project based on selected platform
     const dailyWithChannels = dateFiltered.map((row) => {
-      let revenue = row.originalRevenue;
-      let spent = row.originalSpent;
+      let revenue = 0;
+      let spent = 0;
+      let roas = 0;
 
-      // Filter by platform
-      if (platform === "Shopify") {
-        revenue = row.shopify;
-        spent = row.originalSpent * (CHANNEL_RATIOS.shopify / 0.867);
-      } else if (platform === "Amazon") {
-        revenue = row.amazonPaid + row.amazonOrganic;
-        spent = row.originalSpent * (CHANNEL_RATIOS.amazonPaid / 0.867);
-      } else if (platform === "Flipkart") {
-        revenue = row.flipkartPaid + row.flipkartOrganic;
-        spent = row.originalSpent * (CHANNEL_RATIOS.flipkartPaid / 0.867);
-      } else if (platform === "Blinkit") {
-        revenue = row.blinkit;
-        spent = row.originalSpent * (CHANNEL_RATIOS.blinkit / 0.867);
+      // Filter by platform - actual data mapped directly
+      if (platform === "All" || platform === "Blinkit") {
+        revenue = row.originalRevenue;
+        spent = row.originalSpent;
+        roas = row.originalRoas;
+      } else {
+        // Other platforms have no data in the current Blinkit spreadsheet
+        revenue = 0;
+        spent = 0;
+        roas = 0;
       }
-
-      const roas = spent > 0 ? revenue / spent : 0;
 
       return {
         ...row,
@@ -368,30 +367,17 @@ export default function DailyPerformanceDashboard() {
 
     const overallTotalRevenue = totalShopify + totalAmazonPaid + totalFlipkartPaid + totalBlinkit;
 
-    // Paid vs Organic share (dynamic to selected platform)
-    let paidRevenue = 0;
-    let organicRevenue = 0;
-
-    if (platform === "All") {
-      paidRevenue = totalShopify + totalAmazonPaid + totalFlipkartPaid + totalBlinkit;
-      organicRevenue = totalAmazonOrganic + totalFlipkartOrganic;
-    } else if (platform === "Shopify") {
-      paidRevenue = totalShopify;
-      organicRevenue = 0;
-    } else if (platform === "Amazon") {
-      paidRevenue = totalAmazonPaid;
-      organicRevenue = totalAmazonOrganic;
-    } else if (platform === "Flipkart") {
-      paidRevenue = totalFlipkartPaid;
-      organicRevenue = totalFlipkartOrganic;
-    } else if (platform === "Blinkit") {
-      paidRevenue = totalBlinkit;
-      organicRevenue = 0;
-    }
+    // Direct vs Indirect share
+    const directRev = dailyWithChannels.reduce((a, r) => a + (r.directSales || 0), 0);
+    const indirectRev = dailyWithChannels.reduce((a, r) => a + (r.indirectSales || 0), 0);
+    
+    // We update paidRevenue/organicRevenue so we don't have to rename everything in the JSX right now
+    const paidRevenue = directRev;
+    const organicRevenue = indirectRev;
 
     const paidOrganicData = [
-      { name: "Paid Revenue", value: paidRevenue },
-      { name: "Organic Revenue", value: organicRevenue },
+      { name: "Direct Sales", value: paidRevenue },
+      { name: "Indirect Sales", value: organicRevenue },
     ].filter(item => item.value > 0);
 
     if (paidOrganicData.length === 0) {
@@ -764,16 +750,12 @@ export default function DailyPerformanceDashboard() {
 
       {/* ─────── CHART ROW 2 — Channel | Paid/Organic | Platform Share | Heatmap ─────── */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-        {/* Chart 3: Daily Revenue by Channel */}
+        {/* Chart 3: Daily Sales (Direct vs Indirect) */}
         <div className="p-5 rounded-xl border border-border bg-card shadow-sm flex flex-col gap-3">
-          <h2 className="text-sm font-bold tracking-tight text-foreground">3. Daily Revenue by Channel</h2>
+          <h2 className="text-sm font-bold tracking-tight text-foreground">3. Daily Sales (Direct vs Indirect)</h2>
           <div className="flex flex-wrap gap-x-3 gap-y-1 text-[9px] text-muted-foreground font-medium">
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm inline-block" style={{ backgroundColor: CHANNEL_COLORS.shopify }} /> Shopify</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm inline-block" style={{ backgroundColor: CHANNEL_COLORS.amazon }} /> Amazon</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm inline-block" style={{ backgroundColor: CHANNEL_COLORS.amazonOrganic }} /> Amazon Organic</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm inline-block" style={{ backgroundColor: CHANNEL_COLORS.flipkart }} /> Flipkart</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm inline-block" style={{ backgroundColor: CHANNEL_COLORS.flipkartOrganic }} /> Flipkart Organic</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm inline-block" style={{ backgroundColor: CHANNEL_COLORS.blinkit }} /> Blinkit</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm inline-block" style={{ backgroundColor: "#1D4ED8" }} /> Direct Sales</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm inline-block" style={{ backgroundColor: "#0D9488" }} /> Indirect Sales</span>
           </div>
           <div className="flex-1 min-h-[200px]">
             <ResponsiveContainer width="100%" height="100%">
@@ -782,20 +764,16 @@ export default function DailyPerformanceDashboard() {
                 <XAxis dataKey="name" stroke="#71717a" fontSize={7} tickLine={false} axisLine={false} interval={daily.length > 15 ? 2 : 1} />
                 <YAxis stroke="#71717a" fontSize={8} tickLine={false} axisLine={false} tickFormatter={(v) => `₹${formatCompactLabel(v)}`} />
                 <Tooltip content={<ChannelTooltip />} />
-                <Bar dataKey="shopify" name="Shopify" stackId="ch" fill={CHANNEL_COLORS.shopify} />
-                <Bar dataKey="amazonPaid" name="Amazon" stackId="ch" fill={CHANNEL_COLORS.amazon} />
-                <Bar dataKey="amazonOrganic" name="Amazon Organic" stackId="ch" fill={CHANNEL_COLORS.amazonOrganic} />
-                <Bar dataKey="flipkartPaid" name="Flipkart" stackId="ch" fill={CHANNEL_COLORS.flipkart} />
-                <Bar dataKey="flipkartOrganic" name="Flipkart Organic" stackId="ch" fill={CHANNEL_COLORS.flipkartOrganic} />
-                <Bar dataKey="blinkit" name="Blinkit" stackId="ch" fill={CHANNEL_COLORS.blinkit} radius={[2, 2, 0, 0]} />
+                <Bar dataKey="directSales" name="Direct Sales" stackId="ch" fill="#1D4ED8" />
+                <Bar dataKey="indirectSales" name="Indirect Sales" stackId="ch" fill="#0D9488" radius={[2, 2, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        {/* Chart 4: Paid vs Organic Revenue */}
+        {/* Chart 4: Direct vs Indirect Sales */}
         <div className="p-5 rounded-xl border border-border bg-card shadow-sm flex flex-col gap-3">
-          <h2 className="text-sm font-bold tracking-tight text-foreground">4. Paid vs Organic Revenue</h2>
+          <h2 className="text-sm font-bold tracking-tight text-foreground">4. Direct vs Indirect Sales</h2>
           <div className="flex-1 flex flex-col items-center justify-center gap-2">
             <div className="relative w-full flex items-center justify-center" style={{ height: 180 }}>
               <ResponsiveContainer width="100%" height="100%">
