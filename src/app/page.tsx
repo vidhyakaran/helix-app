@@ -215,7 +215,7 @@ const renderSpentLabel = ({ x, y, width, value }: any) => {
 
 // ═══════════ MAIN COMPONENT ═══════════
 
-export default function DailyPerformanceDashboard() {
+export default function MonthlyPerformanceDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<ApiResponse | null>(null);
@@ -247,10 +247,10 @@ export default function DailyPerformanceDashboard() {
   const computed = useMemo(() => {
     if (!data) return null;
 
-    const daily = [...data.dailyPerformance].reverse();
+    const summaryData = [...data.monthlySummary].reverse();
 
-    // 1. Map row data directly from Excel sheet
-    const dailyWithAllChannels = daily.map((row) => {
+    // 1. Map row data directly from Excel sheet summary
+    const summaryWithAllChannels = summaryData.map((row) => {
       const total = row.totalSales || 0;
       
       // Since the sheet is specifically for Blinkit, all revenue maps to Blinkit
@@ -262,8 +262,8 @@ export default function DailyPerformanceDashboard() {
       const blinkit = total;
 
       return {
-        name: shortDate(row.date),
-        date: row.date,
+        name: row.month,
+        date: row.month,
         shopify,
         amazonPaid,
         amazonOrganic,
@@ -271,7 +271,7 @@ export default function DailyPerformanceDashboard() {
         flipkartOrganic,
         blinkit,
         originalRevenue: total,
-        originalSpent: row.budgetSpent || 0,
+        originalSpent: row.amountSpent || 0,
         originalRoas: row.roas || 0,
         directSales: row.directSales || 0,
         indirectSales: row.indirectSales || 0,
@@ -279,37 +279,16 @@ export default function DailyPerformanceDashboard() {
     });
 
     // 2. Filter by date range first
-    let dateFiltered = dailyWithAllChannels;
+    let dateFiltered = summaryWithAllChannels;
 
     if (dateRangeType === "May26") {
-      dateFiltered = dailyWithAllChannels.filter(r => {
-        const d = parseDateString(r.date);
-        return d.getMonth() === 4 && d.getFullYear() === 2026;
-      });
+      dateFiltered = summaryWithAllChannels.filter(r => r.name.toLowerCase().includes("may"));
     } else if (dateRangeType === "Apr26") {
-      dateFiltered = dailyWithAllChannels.filter(r => {
-        const d = parseDateString(r.date);
-        return d.getMonth() === 3 && d.getFullYear() === 2026;
-      });
+      dateFiltered = summaryWithAllChannels.filter(r => r.name.toLowerCase().includes("apr"));
     } else if (dateRangeType === "Mar26") {
-      dateFiltered = dailyWithAllChannels.filter(r => {
-        const d = parseDateString(r.date);
-        return d.getMonth() === 2 && d.getFullYear() === 2026;
-      });
-    } else if (dateRangeType === "Last7") {
-      dateFiltered = dailyWithAllChannels.slice(-7);
-    } else if (dateRangeType === "Last30") {
-      dateFiltered = dailyWithAllChannels.slice(-30);
-    } else if (dateRangeType === "Custom") {
-      if (customStartDate) {
-        const start = new Date(customStartDate);
-        dateFiltered = dateFiltered.filter(r => parseDateString(r.date) >= start);
-      }
-      if (customEndDate) {
-        const end = new Date(customEndDate);
-        end.setHours(23, 59, 59, 999);
-        dateFiltered = dateFiltered.filter(r => parseDateString(r.date) <= end);
-      }
+      dateFiltered = summaryWithAllChannels.filter(r => r.name.toLowerCase().includes("mar"));
+    } else if (dateRangeType === "Last7" || dateRangeType === "Last30" || dateRangeType === "Custom") {
+      dateFiltered = summaryWithAllChannels;
     }
 
     // 3. Filter/re-project based on selected platform
@@ -537,7 +516,7 @@ export default function DailyPerformanceDashboard() {
       iconColor: "text-emerald-500",
     },
     {
-      label: "Average Daily Revenue",
+      label: "Average Revenue / Period",
       value: formatCurrency(avgDailyRevenue),
       sub: "vs previous period",
       icon: Activity,
@@ -545,8 +524,8 @@ export default function DailyPerformanceDashboard() {
       iconColor: "text-emerald-500",
     },
     {
-      label: "Best Day (Revenue)",
-      value: bestDay ? shortDate(bestDay.date) : "—",
+      label: "Best Period (Revenue)",
+      value: bestDay ? bestDay.date : "—",
       sub: bestDay ? formatCurrency(bestDay.totalSales) : "",
       icon: Calendar,
       iconBg: "bg-emerald-500/15",
@@ -583,7 +562,7 @@ export default function DailyPerformanceDashboard() {
       {/* ─────── HEADER ─────── */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Daily Performance Dashboard</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Monthly Performance Summary</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
             {firstDate} – {lastDate}
           </p>
@@ -686,7 +665,7 @@ export default function DailyPerformanceDashboard() {
         {/* Chart 1: Daily Revenue vs Spent */}
         <div className="p-5 rounded-xl border border-border bg-card shadow-sm flex flex-col gap-3">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-bold tracking-tight text-foreground">1. Daily Revenue vs Spent</h2>
+            <h2 className="text-sm font-bold tracking-tight text-foreground">1. Monthly Revenue vs Spent</h2>
             <div className="flex items-center gap-4 text-[10px] text-muted-foreground font-medium">
               <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-emerald-500 inline-block rounded" /> Total Revenue</span>
               <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-blue-400 inline-block rounded" /> Spent</span>
@@ -711,7 +690,7 @@ export default function DailyPerformanceDashboard() {
         {/* Chart 2: Daily ROAS Trend */}
         <div className="p-5 rounded-xl border border-border bg-card shadow-sm flex flex-col gap-3">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-bold tracking-tight text-foreground">2. Daily ROAS Trend</h2>
+            <h2 className="text-sm font-bold tracking-tight text-foreground">2. Monthly ROAS Trend</h2>
             <div className="flex items-center gap-4 text-[10px] text-muted-foreground font-medium">
               <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-emerald-500 inline-block rounded" /> ROAS</span>
               <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-muted-foreground/50 inline-block rounded border-t border-dashed" /> Target ROAS (3.0)</span>
@@ -750,9 +729,9 @@ export default function DailyPerformanceDashboard() {
 
       {/* ─────── CHART ROW 2 — Channel | Paid/Organic | Platform Share | Heatmap ─────── */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-        {/* Chart 3: Daily Sales (Direct vs Indirect) */}
+        {/* Chart 3: Monthly Sales (Direct vs Indirect) */}
         <div className="p-5 rounded-xl border border-border bg-card shadow-sm flex flex-col gap-3">
-          <h2 className="text-sm font-bold tracking-tight text-foreground">3. Daily Sales (Direct vs Indirect)</h2>
+          <h2 className="text-sm font-bold tracking-tight text-foreground">3. Monthly Sales (Direct vs Indirect)</h2>
           <div className="flex flex-wrap gap-x-3 gap-y-1 text-[9px] text-muted-foreground font-medium">
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm inline-block" style={{ backgroundColor: "#1D4ED8" }} /> Direct Sales</span>
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm inline-block" style={{ backgroundColor: "#0D9488" }} /> Indirect Sales</span>
