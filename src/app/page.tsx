@@ -666,7 +666,7 @@ export default function DailyPerformanceDashboard() {
                       <Cell key={i} fill={PAID_ORGANIC_COLORS[i]} />
                     ))}
                   </Pie>
-                  <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                  <Tooltip formatter={(value: any) => formatCurrency(Number(value))} />
                 </PieChart>
               </ResponsiveContainer>
               <div className="absolute inset-0 flex items-center justify-center flex-col pointer-events-none">
@@ -728,7 +728,7 @@ export default function DailyPerformanceDashboard() {
                       <Cell key={i} fill={PLATFORM_PIE_COLORS[i]} />
                     ))}
                   </Pie>
-                  <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                  <Tooltip formatter={(value: any) => formatCurrency(Number(value))} />
                 </PieChart>
               </ResponsiveContainer>
               <div className="absolute inset-0 flex items-center justify-center flex-col pointer-events-none">
