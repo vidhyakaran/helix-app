@@ -230,20 +230,8 @@ export default function DailyPerformanceDashboard() {
 
     const daily = [...data.dailyPerformance].reverse();
 
-    // Aggregates
-    const totalRevenue = daily.reduce((a, r) => a + r.totalSales, 0);
-    const totalSpent = daily.reduce((a, r) => a + r.budgetSpent, 0);
-    const avgRoas = totalSpent > 0 ? totalRevenue / totalSpent : 0;
-    const avgDailyRevenue = daily.length > 0 ? Math.round(totalRevenue / daily.length) : 0;
-
-    // Best day by revenue
-    const bestDay = daily.reduce(
-      (best, r) => (r.totalSales > (best?.totalSales ?? 0) ? r : best),
-      null as DailyData | null
-    );
-
-    // Channel breakdowns per day
-    const dailyWithChannels = daily.map((row, i) => {
+    // 1. Calculate all baseline channel values for each day first
+    const dailyWithAllChannels = daily.map((row, i) => {
       const total = row.totalSales;
       const v = Math.sin(i * 7.3) * 0.015;
       const shopify = Math.round(total * (CHANNEL_RATIOS.shopify + v));
@@ -251,49 +239,122 @@ export default function DailyPerformanceDashboard() {
       const amazonOrganic = Math.round(total * (CHANNEL_RATIOS.amazonOrganic + v * 0.2));
       const flipkartPaid = Math.round(total * (CHANNEL_RATIOS.flipkartPaid - v * 0.15));
       const flipkartOrganic = Math.round(total * CHANNEL_RATIOS.flipkartOrganic);
-      const blinkit = total - shopify - amazonPaid - amazonOrganic - flipkartPaid - flipkartOrganic;
+      const blinkit = Math.max(0, total - shopify - amazonPaid - amazonOrganic - flipkartPaid - flipkartOrganic);
 
       return {
         name: shortDate(row.date),
         date: row.date,
-        revenue: row.totalSales,
-        spent: row.budgetSpent,
-        roas: row.roas,
         shopify,
         amazonPaid,
         amazonOrganic,
         flipkartPaid,
         flipkartOrganic,
-        blinkit: Math.max(0, blinkit),
+        blinkit,
+        originalRevenue: total,
+        originalSpent: row.budgetSpent,
+        originalRoas: row.roas,
       };
     });
 
-    // Platform totals
-    const totalShopify = dailyWithChannels.reduce((a, r) => a + r.shopify, 0);
-    const totalAmazonPaid = dailyWithChannels.reduce((a, r) => a + r.amazonPaid, 0);
-    const totalAmazonOrganic = dailyWithChannels.reduce((a, r) => a + r.amazonOrganic, 0);
-    const totalFlipkartPaid = dailyWithChannels.reduce((a, r) => a + r.flipkartPaid, 0);
-    const totalFlipkartOrganic = dailyWithChannels.reduce((a, r) => a + r.flipkartOrganic, 0);
-    const totalBlinkit = dailyWithChannels.reduce((a, r) => a + r.blinkit, 0);
+    // 2. Filter/re-project based on selected platform
+    const dailyWithChannels = dailyWithAllChannels.map((row) => {
+      let revenue = row.originalRevenue;
+      let spent = row.originalSpent;
 
-    // Paid vs Organic
-    const paidRevenue = totalShopify + totalAmazonPaid + totalFlipkartPaid + totalBlinkit;
-    const organicRevenue = totalAmazonOrganic + totalFlipkartOrganic;
+      // Filter by platform
+      if (platform === "Shopify") {
+        revenue = row.shopify;
+        spent = row.originalSpent * (CHANNEL_RATIOS.shopify / 0.867);
+      } else if (platform === "Amazon") {
+        revenue = row.amazonPaid + row.amazonOrganic;
+        spent = row.originalSpent * (CHANNEL_RATIOS.amazonPaid / 0.867);
+      } else if (platform === "Flipkart") {
+        revenue = row.flipkartPaid + row.flipkartOrganic;
+        spent = row.originalSpent * (CHANNEL_RATIOS.flipkartPaid / 0.867);
+      } else if (platform === "Blinkit") {
+        revenue = row.blinkit;
+        spent = row.originalSpent * (CHANNEL_RATIOS.blinkit / 0.867);
+      }
+
+      const roas = spent > 0 ? revenue / spent : 0;
+
+      return {
+        ...row,
+        revenue,
+        spent,
+        roas,
+        // Zero-out non-active channels so that Stacked Bar Chart automatically reflects active platform channels
+        shopify: (platform === "All" || platform === "Shopify") ? row.shopify : 0,
+        amazonPaid: (platform === "All" || platform === "Amazon") ? row.amazonPaid : 0,
+        amazonOrganic: (platform === "All" || platform === "Amazon") ? row.amazonOrganic : 0,
+        flipkartPaid: (platform === "All" || platform === "Flipkart") ? row.flipkartPaid : 0,
+        flipkartOrganic: (platform === "All" || platform === "Flipkart") ? row.flipkartOrganic : 0,
+        blinkit: (platform === "All" || platform === "Blinkit") ? row.blinkit : 0,
+      };
+    });
+
+    // Aggregates based on active/filtered view
+    const totalRevenue = dailyWithChannels.reduce((a, r) => a + r.revenue, 0);
+    const totalSpent = dailyWithChannels.reduce((a, r) => a + r.spent, 0);
+    const avgRoas = totalSpent > 0 ? totalRevenue / totalSpent : 0;
+    const avgDailyRevenue = dailyWithChannels.length > 0 ? Math.round(totalRevenue / dailyWithChannels.length) : 0;
+
+    // Best day based on platform revenue
+    const bestDay = dailyWithChannels.reduce(
+      (best, r) => (r.revenue > (best?.revenue ?? 0) ? r : best),
+      null as typeof dailyWithChannels[0] | null
+    );
+
+    // Platform totals across the timeline
+    const totalShopify = dailyWithAllChannels.reduce((a, r) => a + r.shopify, 0);
+    const totalAmazonPaid = dailyWithAllChannels.reduce((a, r) => a + r.amazonPaid, 0);
+    const totalAmazonOrganic = dailyWithAllChannels.reduce((a, r) => a + r.amazonOrganic, 0);
+    const totalFlipkartPaid = dailyWithAllChannels.reduce((a, r) => a + r.flipkartPaid, 0);
+    const totalFlipkartOrganic = dailyWithAllChannels.reduce((a, r) => a + r.flipkartOrganic, 0);
+    const totalBlinkit = dailyWithAllChannels.reduce((a, r) => a + r.blinkit, 0);
+
+    const overallTotalRevenue = totalShopify + totalAmazonPaid + totalFlipkartPaid + totalBlinkit;
+
+    // Paid vs Organic share (dynamic to selected platform)
+    let paidRevenue = 0;
+    let organicRevenue = 0;
+
+    if (platform === "All") {
+      paidRevenue = totalShopify + totalAmazonPaid + totalFlipkartPaid + totalBlinkit;
+      organicRevenue = totalAmazonOrganic + totalFlipkartOrganic;
+    } else if (platform === "Shopify") {
+      paidRevenue = totalShopify;
+      organicRevenue = 0;
+    } else if (platform === "Amazon") {
+      paidRevenue = totalAmazonPaid;
+      organicRevenue = totalAmazonOrganic;
+    } else if (platform === "Flipkart") {
+      paidRevenue = totalFlipkartPaid;
+      organicRevenue = totalFlipkartOrganic;
+    } else if (platform === "Blinkit") {
+      paidRevenue = totalBlinkit;
+      organicRevenue = 0;
+    }
 
     const paidOrganicData = [
       { name: "Paid Revenue", value: paidRevenue },
       { name: "Organic Revenue", value: organicRevenue },
-    ];
+    ].filter(item => item.value > 0);
 
+    if (paidOrganicData.length === 0) {
+      paidOrganicData.push({ name: "Revenue", value: totalRevenue });
+    }
+
+    // Platform share using static/overall reference
     const platformShareData = [
-      { name: "Shopify", value: totalShopify, percent: ((totalShopify / totalRevenue) * 100).toFixed(1) },
-      { name: "Amazon (Paid)", value: totalAmazonPaid, percent: ((totalAmazonPaid / totalRevenue) * 100).toFixed(1) },
-      { name: "Flipkart (Paid)", value: totalFlipkartPaid, percent: ((totalFlipkartPaid / totalRevenue) * 100).toFixed(1) },
-      { name: "Blinkit", value: totalBlinkit, percent: ((totalBlinkit / totalRevenue) * 100).toFixed(1) },
+      { name: "Shopify", value: totalShopify, percent: ((totalShopify / overallTotalRevenue) * 100).toFixed(1) },
+      { name: "Amazon (Paid)", value: totalAmazonPaid, percent: ((totalAmazonPaid / overallTotalRevenue) * 100).toFixed(1) },
+      { name: "Flipkart (Paid)", value: totalFlipkartPaid, percent: ((totalFlipkartPaid / overallTotalRevenue) * 100).toFixed(1) },
+      { name: "Blinkit", value: totalBlinkit, percent: ((totalBlinkit / overallTotalRevenue) * 100).toFixed(1) },
     ];
 
     const highestChannel = platformShareData.reduce((max, c) => c.value > max.value ? c : max, platformShareData[0]);
-    const daysAboveTarget = daily.filter(r => r.roas >= 3).length;
+    const daysAboveTarget = dailyWithChannels.filter(r => r.roas >= 3).length;
 
     // Date range
     const firstDate = daily.length > 0 ? daily[0].date : "";
@@ -311,7 +372,7 @@ export default function DailyPerformanceDashboard() {
       totalSpent,
       avgRoas,
       avgDailyRevenue,
-      bestDay,
+      bestDay: bestDay ? { date: bestDay.date, totalSales: bestDay.revenue } : null,
       paidOrganicData,
       paidRevenue,
       organicRevenue,
@@ -325,7 +386,7 @@ export default function DailyPerformanceDashboard() {
       hmTotalRevenue,
       hmTotalRoas,
     };
-  }, [data]);
+  }, [data, platform]);
 
   // ═══════════ LOADING STATE ═══════════
 
