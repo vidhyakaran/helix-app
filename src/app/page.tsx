@@ -125,6 +125,22 @@ const shortDate = (dateStr: string) => {
   return dateStr;
 };
 
+const parseDateString = (dateStr: string): Date => {
+  const parts = dateStr.split("-");
+  if (parts.length < 3) return new Date();
+  const day = parseInt(parts[0], 10);
+  const monthName = parts[1].toLowerCase();
+  let year = parseInt(parts[2], 10);
+  if (year < 100) year += 2000;
+
+  const monthMap: Record<string, number> = {
+    jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+    jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11
+  };
+  const month = monthMap[monthName.substring(0, 3)] ?? 0;
+  return new Date(year, month, day);
+};
+
 // ═══════════ CUSTOM TOOLTIPS ═══════════
 
 const RevenueSpentTooltip = ({ active, payload, label }: any) => {
@@ -204,6 +220,9 @@ export default function DailyPerformanceDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<ApiResponse | null>(null);
   const [platform, setPlatform] = useState("All");
+  const [dateRangeType, setDateRangeType] = useState("All");
+  const [customStartDate, setCustomStartDate] = useState("");
+  const [customEndDate, setCustomEndDate] = useState("");
 
   const fetchData = async () => {
     setLoading(true);
@@ -256,8 +275,42 @@ export default function DailyPerformanceDashboard() {
       };
     });
 
-    // 2. Filter/re-project based on selected platform
-    const dailyWithChannels = dailyWithAllChannels.map((row) => {
+    // 2. Filter by date range first
+    let dateFiltered = dailyWithAllChannels;
+
+    if (dateRangeType === "May26") {
+      dateFiltered = dailyWithAllChannels.filter(r => {
+        const d = parseDateString(r.date);
+        return d.getMonth() === 4 && d.getFullYear() === 2026;
+      });
+    } else if (dateRangeType === "Apr26") {
+      dateFiltered = dailyWithAllChannels.filter(r => {
+        const d = parseDateString(r.date);
+        return d.getMonth() === 3 && d.getFullYear() === 2026;
+      });
+    } else if (dateRangeType === "Mar26") {
+      dateFiltered = dailyWithAllChannels.filter(r => {
+        const d = parseDateString(r.date);
+        return d.getMonth() === 2 && d.getFullYear() === 2026;
+      });
+    } else if (dateRangeType === "Last7") {
+      dateFiltered = dailyWithAllChannels.slice(-7);
+    } else if (dateRangeType === "Last30") {
+      dateFiltered = dailyWithAllChannels.slice(-30);
+    } else if (dateRangeType === "Custom") {
+      if (customStartDate) {
+        const start = new Date(customStartDate);
+        dateFiltered = dateFiltered.filter(r => parseDateString(r.date) >= start);
+      }
+      if (customEndDate) {
+        const end = new Date(customEndDate);
+        end.setHours(23, 59, 59, 999);
+        dateFiltered = dateFiltered.filter(r => parseDateString(r.date) <= end);
+      }
+    }
+
+    // 3. Filter/re-project based on selected platform
+    const dailyWithChannels = dateFiltered.map((row) => {
       let revenue = row.originalRevenue;
       let spent = row.originalSpent;
 
@@ -306,12 +359,12 @@ export default function DailyPerformanceDashboard() {
     );
 
     // Platform totals across the timeline
-    const totalShopify = dailyWithAllChannels.reduce((a, r) => a + r.shopify, 0);
-    const totalAmazonPaid = dailyWithAllChannels.reduce((a, r) => a + r.amazonPaid, 0);
-    const totalAmazonOrganic = dailyWithAllChannels.reduce((a, r) => a + r.amazonOrganic, 0);
-    const totalFlipkartPaid = dailyWithAllChannels.reduce((a, r) => a + r.flipkartPaid, 0);
-    const totalFlipkartOrganic = dailyWithAllChannels.reduce((a, r) => a + r.flipkartOrganic, 0);
-    const totalBlinkit = dailyWithAllChannels.reduce((a, r) => a + r.blinkit, 0);
+    const totalShopify = dateFiltered.reduce((a, r) => a + r.shopify, 0);
+    const totalAmazonPaid = dateFiltered.reduce((a, r) => a + r.amazonPaid, 0);
+    const totalAmazonOrganic = dateFiltered.reduce((a, r) => a + r.amazonOrganic, 0);
+    const totalFlipkartPaid = dateFiltered.reduce((a, r) => a + r.flipkartPaid, 0);
+    const totalFlipkartOrganic = dateFiltered.reduce((a, r) => a + r.flipkartOrganic, 0);
+    const totalBlinkit = dateFiltered.reduce((a, r) => a + r.blinkit, 0);
 
     const overallTotalRevenue = totalShopify + totalAmazonPaid + totalFlipkartPaid + totalBlinkit;
 
@@ -347,18 +400,18 @@ export default function DailyPerformanceDashboard() {
 
     // Platform share using static/overall reference
     const platformShareData = [
-      { name: "Shopify", value: totalShopify, percent: ((totalShopify / overallTotalRevenue) * 100).toFixed(1) },
-      { name: "Amazon (Paid)", value: totalAmazonPaid, percent: ((totalAmazonPaid / overallTotalRevenue) * 100).toFixed(1) },
-      { name: "Flipkart (Paid)", value: totalFlipkartPaid, percent: ((totalFlipkartPaid / overallTotalRevenue) * 100).toFixed(1) },
-      { name: "Blinkit", value: totalBlinkit, percent: ((totalBlinkit / overallTotalRevenue) * 100).toFixed(1) },
+      { name: "Shopify", value: totalShopify, percent: ((totalShopify / Math.max(1, overallTotalRevenue)) * 100).toFixed(1) },
+      { name: "Amazon (Paid)", value: totalAmazonPaid, percent: ((totalAmazonPaid / Math.max(1, overallTotalRevenue)) * 100).toFixed(1) },
+      { name: "Flipkart (Paid)", value: totalFlipkartPaid, percent: ((totalFlipkartPaid / Math.max(1, overallTotalRevenue)) * 100).toFixed(1) },
+      { name: "Blinkit", value: totalBlinkit, percent: ((totalBlinkit / Math.max(1, overallTotalRevenue)) * 100).toFixed(1) },
     ];
 
     const highestChannel = platformShareData.reduce((max, c) => c.value > max.value ? c : max, platformShareData[0]);
     const daysAboveTarget = dailyWithChannels.filter(r => r.roas >= 3).length;
 
     // Date range
-    const firstDate = daily.length > 0 ? daily[0].date : "";
-    const lastDate = daily.length > 0 ? daily[daily.length - 1].date : "";
+    const firstDate = dateFiltered.length > 0 ? dateFiltered[0].date : "";
+    const lastDate = dateFiltered.length > 0 ? dateFiltered[dateFiltered.length - 1].date : "";
 
     // Heatmap table — last 5 days
     const heatmapData = dailyWithChannels.slice(-5);
@@ -386,7 +439,7 @@ export default function DailyPerformanceDashboard() {
       hmTotalRevenue,
       hmTotalRoas,
     };
-  }, [data, platform]);
+  }, [data, platform, dateRangeType, customStartDate, customEndDate]);
 
   // ═══════════ LOADING STATE ═══════════
 
@@ -552,11 +605,43 @@ export default function DailyPerformanceDashboard() {
         <div className="flex items-center gap-3">
           <div className="flex flex-col gap-1">
             <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Date Range</span>
-            <div className="flex items-center gap-1.5 bg-secondary border border-border rounded-lg px-3 py-1.5 text-xs font-medium">
-              <Calendar size={12} className="text-muted-foreground" />
-              <span>{firstDate} to {lastDate}</span>
-            </div>
+            <select
+              value={dateRangeType}
+              onChange={(e) => setDateRangeType(e.target.value)}
+              className="bg-secondary border border-border rounded-lg px-3 py-1.5 text-xs font-medium outline-none cursor-pointer"
+            >
+              <option value="All">All Time</option>
+              <option value="May26">May 2026</option>
+              <option value="Apr26">April 2026</option>
+              <option value="Mar26">March 2026</option>
+              <option value="Last7">Last 7 Days</option>
+              <option value="Last30">Last 30 Days</option>
+              <option value="Custom">Custom...</option>
+            </select>
           </div>
+
+          {dateRangeType === "Custom" && (
+            <>
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Start Date</span>
+                <input
+                  type="date"
+                  value={customStartDate}
+                  onChange={(e) => setCustomStartDate(e.target.value)}
+                  className="bg-secondary border border-border rounded-lg px-2.5 py-1 text-xs font-medium outline-none text-foreground cursor-pointer"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">End Date</span>
+                <input
+                  type="date"
+                  value={customEndDate}
+                  onChange={(e) => setCustomEndDate(e.target.value)}
+                  className="bg-secondary border border-border rounded-lg px-2.5 py-1 text-xs font-medium outline-none text-foreground cursor-pointer"
+                />
+              </div>
+            </>
+          )}
           <div className="flex flex-col gap-1">
             <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Platform</span>
             <select
